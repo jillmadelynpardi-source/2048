@@ -1,0 +1,144 @@
+import curses
+import random
+
+
+GRID_SIZE = 4
+
+
+def init_grid():
+    """Create an empty 4×4 grid and add two initial tiles."""
+    grid = [[0 for _ in range(GRID_SIZE)] for _ in range(GRID_SIZE)]
+    add_random_tile(grid)
+    add_random_tile(grid)
+    return grid
+
+
+def add_random_tile(grid):
+    """Add a 2 or 4 to a random empty cell."""
+    empty = [(r, c) for r in range(GRID_SIZE) for c in range(GRID_SIZE) if grid[r][c] == 0]
+    if not empty:
+        return
+
+    r, c = random.choice(empty)
+    grid[r][c] = 4 if random.random() < 0.1 else 2
+
+
+def compress(row):
+    """Slide non-zero tiles to the left."""
+    new_row = [num for num in row if num != 0]
+    new_row += [0] * (GRID_SIZE - len(new_row))
+    return new_row
+
+
+def merge(row):
+    """Merge adjacent tiles."""
+    for i in range(GRID_SIZE - 1):
+        if row[i] != 0 and row[i] == row[i + 1]:
+            row[i] *= 2
+            row[i + 1] = 0
+    return row
+
+
+def move_left(grid):
+    moved = False
+    new_grid = []
+    for row in grid:
+        compressed = compress(row)
+        merged = merge(compressed)
+        final = compress(merged)
+        if final != row:
+            moved = True
+        new_grid.append(final)
+    return new_grid, moved
+
+
+def move_right(grid):
+    reversed_grid = [list(reversed(row)) for row in grid]
+    moved_grid, moved = move_left(reversed_grid)
+    return [list(reversed(row)) for row in moved_grid], moved
+
+
+def move_up(grid):
+    transposed = list(map(list, zip(*grid)))
+    moved_grid, moved = move_left(transposed)
+    return list(map(list, zip(*moved_grid))), moved
+
+
+def move_down(grid):
+    transposed = list(map(list, zip(*grid)))
+    moved_grid, moved = move_right(transposed)
+    return list(map(list, zip(*moved_grid))), moved
+
+
+def is_game_over(grid):
+    """Check if no moves are possible."""
+    for r in range(GRID_SIZE):
+        for c in range(GRID_SIZE):
+            if grid[r][c] == 0:
+                return False
+            if c < GRID_SIZE - 1 and grid[r][c] == grid[r][c + 1]:
+                return False
+            if r < GRID_SIZE - 1 and grid[r][c] == grid[r + 1][c]:
+                return False
+    return True
+
+
+def draw(stdscr, grid, score):
+    stdscr.clear()
+
+    stdscr.addstr(0, 0, "2048 — Curses Edition")
+    stdscr.addstr(1, 0, f"Score: {score}")
+    stdscr.addstr(2, 0, "-" * 22)
+
+    for r in range(GRID_SIZE):
+        line = ""
+        for c in range(GRID_SIZE):
+            val = grid[r][c]
+            line += f"{val:^5}" if val != 0 else "  .  "
+        stdscr.addstr(3 + r, 0, line)
+
+    stdscr.addstr(8, 0, "Use arrow keys. Press q to quit.")
+    stdscr.refresh()
+
+
+def main(stdscr):
+    curses.curs_set(0)
+    stdscr.nodelay(False)
+    stdscr.keypad(True)
+
+    grid = init_grid()
+    score = 0
+
+    while True:
+        draw(stdscr, grid, score)
+
+        key = stdscr.getch()
+
+        if key == ord("q"):
+            break
+
+        moved = False
+
+        if key == curses.KEY_LEFT:
+            grid, moved = move_left(grid)
+        elif key == curses.KEY_RIGHT:
+            grid, moved = move_right(grid)
+        elif key == curses.KEY_UP:
+            grid, moved = move_up(grid)
+        elif key == curses.KEY_DOWN:
+            grid, moved = move_down(grid)
+
+        if moved:
+            # Recalculate score
+            score = sum(sum(row) for row in grid)
+            add_random_tile(grid)
+
+        if is_game_over(grid):
+            draw(stdscr, grid, score)
+            stdscr.addstr(10, 0, "GAME OVER! Press any key to exit.")
+            stdscr.getch()
+            break
+
+
+if __name__ == "__main__":
+    curses.wrapper(main)
